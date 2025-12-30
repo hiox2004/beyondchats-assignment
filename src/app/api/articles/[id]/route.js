@@ -1,12 +1,24 @@
 import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Article from '@/models/Article';
 
-// GET single article
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    const article = await Article.findById(params.id);
+    
+    // Await params in Next.js 15+
+    const { id } = await params;
+    
+    // Validate it's a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid ID format' },
+        { status: 400 }
+      );
+    }
+    
+    const article = await Article.findById(id);
     
     if (!article) {
       return NextResponse.json(
@@ -17,6 +29,7 @@ export async function GET(request, { params }) {
     
     return NextResponse.json({ success: true, data: article });
   } catch (error) {
+    console.error('GET Error:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
@@ -24,13 +37,21 @@ export async function GET(request, { params }) {
   }
 }
 
-// PUT update article
 export async function PUT(request, { params }) {
   try {
     await connectDB();
     const body = await request.json();
+    const { id } = await params;
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid ID format' },
+        { status: 400 }
+      );
+    }
+    
     const article = await Article.findByIdAndUpdate(
-      params.id,
+      id,
       body,
       { new: true, runValidators: true }
     );
@@ -51,11 +72,19 @@ export async function PUT(request, { params }) {
   }
 }
 
-// DELETE article
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
-    const article = await Article.findByIdAndDelete(params.id);
+    const { id } = await params;
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid ID format' },
+        { status: 400 }
+      );
+    }
+    
+    const article = await Article.findByIdAndDelete(id);
     
     if (!article) {
       return NextResponse.json(

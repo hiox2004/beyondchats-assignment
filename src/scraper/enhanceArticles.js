@@ -1,7 +1,6 @@
 const puppeteer = require('puppeteer');
 const mongoose = require('mongoose');
 const axios = require('axios');
-const cheerio = require('cheerio');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config({ path: '.env.local' });
 
@@ -23,7 +22,6 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Function to search Google
 // Function to search Google using Custom Search API
 async function searchGoogle(query) {
   try {
@@ -57,44 +55,73 @@ async function searchGoogle(query) {
   }
 }
 
-// Function to scrape article content
-async function scrapeArticleContent(url) {
+// Function to scrape article content using Puppeteer with better stealth
+async function scrapeArticleContent(url, browser) {
+  const page = await browser.newPage();
+  
   try {
     console.log(`  Fetching content from: ${url}`);
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 15000
+    
+    // Better user agent and headers
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    });
+    
+    // Set viewport
+    await page.setViewport({ width: 1920, height: 1080 });
+    
+    await page.goto(url, { 
+      waitUntil: 'domcontentloaded',
+      timeout: 30000 
+    });
+    
+    await wait(3000);
+
+    const content = await page.evaluate(() => {
+      // Remove unwanted elements
+      const unwanted = document.querySelectorAll('script, style, nav, header, footer, iframe, .advertisement, .ad, .sidebar, aside, .menu');
+      unwanted.forEach(el => el.remove());
+      
+      // Try multiple selectors for main content
+      const selectors = [
+        'article', 
+        'main', 
+        '[role="main"]',
+        '.post-content', 
+        '.entry-content',
+        '.article-content',
+        '.content',
+        '#content',
+        '.post',
+        'body'
+      ];
+      
+      for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          const text = element.innerText || element.textContent || '';
+          const cleaned = text.trim().replace(/\s+/g, ' ');
+          if (cleaned.length > 300) {
+            return cleaned.substring(0, 2000);
+          }
+        }
+      }
+      
+      // Fallback: get all paragraph text
+      const paragraphs = Array.from(document.querySelectorAll('p'));
+      const allText = paragraphs.map(p => p.innerText).join(' ').trim();
+      return allText.substring(0, 2000) || 'No content found';
     });
 
-    const $ = cheerio.load(response.data);
-    
-    // Remove unwanted elements
-    $('script, style, nav, header, footer, iframe, .advertisement').remove();
-    
-    // Try multiple selectors for main content
-    let content = '';
-    const selectors = ['article', 'main', '.post-content', '.entry-content', '.content', 'body'];
-    
-    for (const selector of selectors) {
-      const element = $(selector);
-      if (element.length) {
-        content = element.text().trim();
-        if (content.length > 200) break;
-      }
-    }
-    
-    // Clean up content
-    content = content
-      .replace(/\s+/g, ' ')
-      .substring(0, 1500);
-    
     console.log(`  Scraped ${content.length} characters`);
+    await page.close();
     return content;
     
   } catch (error) {
-    console.error(`  Failed to scrape ${url}: ${error.message}`);
+    console.error(`  Failed to scrape: ${error.message}`);
+    await page.close();
     return '';
   }
 }
@@ -104,25 +131,37 @@ async function enhanceArticleWithGemini(originalArticle, referenceArticles) {
   try {
     console.log(`  Calling Gemini AI to enhance article...`);
     
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    
+    const prompt = `You are an expert content writer. Rewrite the following article to improve its quality, SEO, and readability while maintaining factual accuracy.
 
-    // Concise prompt to minimize token usage on free tier
-    const prompt = `Enhance this article for quality, SEO, and readability. Keep facts accurate.
+ORIGINAL ARTICLE:
 Title: ${originalArticle.title}
 Content: ${originalArticle.content}
-Output: improved 500-800 word article`;
+
+REFERENCE ARTICLES (for style and formatting inspiration):
+1. ${referenceArticles[0]?.content || 'No reference'}
+2. ${referenceArticles[1]?.content || 'No reference'}
+
+Instructions:
+- Improve the writing quality and flow
+- Make it more engaging and professional
+- Maintain the core message and facts
+- Use a similar tone and structure as the reference articles
+- Keep it around 500-800 words
+- Write in a blog-friendly format
+
+Write the enhanced article now:`;
 
     const result = await model.generateContent(prompt);
-    const enhancedContent = result.response.text();
+    const response = await result.response;
+    const enhancedContent = response.text();
     
     console.log(`  ✓ Article enhanced successfully (${enhancedContent.length} characters)`);
     return enhancedContent;
     
   } catch (error) {
     console.error(`  Gemini API failed: ${error.message}`);
-    if (error.message.includes('429') || error.message.includes('quota')) {
-      console.log(`  ⚠️  Free tier quota reached. Wait 24 hours for reset.`);
-    }
     return originalArticle.content;
   }
 }
@@ -152,36 +191,44 @@ async function enhanceArticles() {
 
       // Step 1: Search Google
       const googleResults = await searchGoogle(article.title);
-
-      await wait(2000);
+      await wait(3000);
 
       if (googleResults.length === 0) {
         console.log('  ⚠ No Google results found, skipping...');
         continue;
       }
 
-      // Step 2: Scrape reference articles
+      // Step 2: Scrape reference articles with retry
       const referenceArticles = [];
       for (const result of googleResults) {
-        const content = await scrapeArticleContent(result.url);
-        if (content) {
+        let content = await scrapeArticleContent(result.url, browser);
+        
+        // If first attempt fails, try one more time
+        if (!content || content.length < 100) {
+          console.log(`  Retrying...`);
+          await wait(3000);
+          content = await scrapeArticleContent(result.url, browser);
+        }
+        
+        if (content && content.length > 100) {
           referenceArticles.push({
             title: result.title,
             url: result.url,
             content: content
           });
         }
-        await wait(2000);
+        await wait(3000);
       }
 
+      // If we got at least 1 reference, continue (don't need both)
       if (referenceArticles.length === 0) {
-        console.log('  ⚠ Could not scrape reference articles, skipping...');
+        console.log('  ⚠ Could not scrape any reference articles, skipping...');
         continue;
       }
 
       // Step 3: Enhance with Gemini
       const enhancedContent = await enhanceArticleWithGemini(article, referenceArticles);
-      await wait(5000); // 4+ seconds between API calls stays under 15 req/min
+      await wait(2000);
 
       // Step 4: Add citations
       const citationsText = '\n\n---\n**References:**\n' +
@@ -203,7 +250,7 @@ async function enhanceArticles() {
       });
 
       console.log(`  ✅ Article enhanced and saved!`);
-      await wait(3000); // Small delay between articles
+      await wait(5000); // Delay between articles
     }
 
     console.log('\n' + '='.repeat(60));
