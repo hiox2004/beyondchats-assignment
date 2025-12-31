@@ -14,27 +14,22 @@ const articleSchema = new mongoose.Schema({
 
 const Article = mongoose.models.Article || mongoose.model('Article', articleSchema);
 
-async function resetArticles() {
+async function deleteAllArticles() {
   try {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/beyondchats');
-    console.log('Connected to MongoDB\n');
+    console.log('🔗 Connected to MongoDB\n');
 
-    const result = await Article.updateMany(
-      {},
-      {
-        $set: { isUpdated: false },
-        $unset: { updatedContent: "", references: "" }
-      }
-    );
+    const result = await Article.deleteMany({});
 
-    console.log(`✅ Reset ${result.modifiedCount} articles`);
-    console.log('All articles are now ready for enhancement again!\n');
+    console.log(`✅ Deleted ${result.deletedCount} articles from database`);
+    console.log('🗑️  Database is now clean - ready to scrape fresh!\n');
 
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error('❌ Error:', error.message);
+    process.exit(1);
   } finally {
     await mongoose.disconnect();
   }
 }
 
-resetArticles();
+deleteAllArticles();

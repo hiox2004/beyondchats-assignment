@@ -8,7 +8,8 @@
     "start": "next start",
     "scrape": "node src/scraper/scrapeBlogs.js",
     "enhance": "node src/scraper/enhanceArticles.js",
-    "reset": "node src/scraper/resetArticles.js",
+    "reset-scraper": "node src/scraper/resetState.js scraper",
+    "reset-full": "node src/scraper/resetState.js db",
     "lint": "eslint"
   },
   "dependencies": {
