@@ -2,6 +2,8 @@
 
 A full-stack web application that scrapes articles from BeyondChats blogs, enhances them using AI, and displays them through a beautiful, responsive interface.
 
+**🚀 [Live Demo](https://beyondchats-assignment-fnaj.vercel.app/)**
+
 ## 🎯 Features
 
 - **Smart Article Scraping**: Automatically scrapes the 5 oldest articles from BeyondChats blogs
@@ -53,7 +55,8 @@ beyondchats-assignment/
 │   └── scraper/
 │       ├── scrapeBlogs.js       # Web scraper for articles
 │       ├── enhanceArticles.js   # AI enhancement script
-│       └── resetArticles.js     # Database cleanup utility
+│       ├── resetArticles.js     # Database cleanup utility
+│       └── resetState.js        # State file management
 ├── public/                       # Static assets
 ├── package.json                  # Dependencies and scripts
 ├── next.config.mjs              # Next.js configuration
@@ -61,7 +64,13 @@ beyondchats-assignment/
 ├── eslint.config.mjs            # ESLint rules
 ├── postcss.config.mjs           # PostCSS configuration
 ├── tailwind.config.js           # Tailwind CSS config
-├── .env.local                   # Environment variables (create this)
+├── .env.local                   # Environment variables (local only)
+├── docs/                        # Documentation folder
+│   ├── SETUP.md                 # Setup and installation guide
+│   ├── ARCHITECTURE.md          # System design and flow
+│   ├── API.md                   # API reference
+│   ├── TROUBLESHOOTING.md       # Common issues and solutions
+│   └── DEPLOYMENT.md            # Deployment instructions
 └── README.md                    # This file
 ```
 
@@ -70,39 +79,48 @@ beyondchats-assignment/
 ### Prerequisites
 
 - Node.js 18+ and npm
-- MongoDB database (local or Atlas cloud)
-- Google Generative AI API key (free tier available)
-- Google Custom Search API key and search engine ID
-- Serper API key (for search results)
+- MongoDB Atlas account (free tier)
+- Google Generative AI API key
+- Google Custom Search API key
 
-### Installation
+### Local Development
 
 1. **Clone and install**:
    ```bash
+   git clone https://github.com/hiox2004/beyondchats-assignment.git
    cd beyondchats-assignment
    npm install
    ```
 
-2. **Create `.env.local` file** in the root directory:
+2. **Create `.env.local` file**:
    ```env
-   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/beyondchats
-   GOOGLE_API_KEY=your_gemini_api_key_here
-   GOOGLE_SEARCH_API_KEY=your_search_api_key_here
-   GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id_here
-   SERPER_API_KEY=your_serper_api_key_here
+   MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/beyondchats
+   GOOGLE_API_KEY=your_gemini_api_key
+   GOOGLE_SEARCH_API_KEY=your_search_api_key
+   GOOGLE_CSE_ID=your_search_engine_id
    ```
 
-3. **Run the development server**:
+3. **Run development server**:
    ```bash
    npm run dev
    ```
-   Open [http://localhost:3000](http://localhost:3000) to see the application.
+   Visit [http://localhost:3000](http://localhost:3000)
+
+4. **Scrape and enhance articles**:
+   ```bash
+   npm run scrape    # Scrape 5 articles
+   npm run enhance   # Enhance 5 articles with AI
+   ```
+
+5. **View live**:
+   - Homepage: [http://localhost:3000](http://localhost:3000)
+   - Article details: Click any article card
 
 ## 📚 Usage Guide
 
 ### 1. Scrape Articles
 
-Scrapes the 5 oldest articles from BeyondChats blogs:
+Scrapes 5 oldest articles from BeyondChats blogs into MongoDB Atlas:
 
 ```bash
 npm run scrape
@@ -110,111 +128,107 @@ npm run scrape
 
 **What happens:**
 - Connects to BeyondChats website using Puppeteer
-- Reads articles from last page, bottom to top
-- Checks for duplicates before adding to database
-- Saves progress to resume from last position
-- Creates/updates `scraper-state.json` tracking file
+- Reads articles bottom-to-top (oldest first)
+- Checks for duplicates before adding
+- Saves progress for resuming next time
+- Data syncs to MongoDB Atlas automatically
 
-**Run multiple times** to scrape more articles (5 per execution).
+**Run multiple times** to scrape more articles (5 per run).
 
 ### 2. Enhance Articles
 
-Enhances articles using Google Gemini AI and search results:
+Enhances articles using Google Gemini AI with search context:
 
 ```bash
 npm run enhance
 ```
 
 **What happens:**
-- Finds 5 non-enhanced articles from database
-- For each article:
-  - Searches for relevant context using Google Custom Search
-  - Scrapes the top 2 search results
-  - Uses Gemini AI to create enhanced content
-  - Adds proper citations and references
-  - Marks article as enhanced
-- Saves progress to `enhance-state.json`
+- Finds 5 unenhanced articles
+- Searches for relevant context
+- Scrapes top 2 results for deeper understanding
+- Generates enhanced content with AI
+- Adds citations and references
+- Data syncs to MongoDB Atlas
 
-**Run multiple times** to enhance more articles. Built-in delays prevent rate limiting:
-- 2s after Google search
-- 2s after Gemini processing
-- 3s between articles
+**Run multiple times** to enhance all articles.
 
-### 3. View and Toggle Content
+### 3. View Live
 
-1. Visit homepage to see all articles
-2. Click on any article to view details
-3. Use the toggle button to switch between original and enhanced versions
-4. See references section with source articles for enhanced content
+Visit the live deployment:
+- **[https://beyondchats-assignment-fnaj.vercel.app/](https://beyondchats-assignment-fnaj.vercel.app/)**
 
-### 4. Filter Articles
+Or locally:
+- **[http://localhost:3000](http://localhost:3000)**
 
-On the homepage:
-- **All**: Shows all scraped articles
-- **Enhanced**: Shows only articles that have been enhanced with AI
+### 4. Toggle Content
+
+On any article detail page:
+- Click **"Toggle"** button to switch between original and enhanced versions
+- See **References** section showing source articles
 
 ## 🔧 Available Commands
 
 ```bash
-# Development
-npm run dev              # Start dev server on http://localhost:3000
+# Development & Deployment
+npm run dev              # Start dev server (http://localhost:3000)
+npm run build            # Build for production
+npm run start            # Start production server
 
 # Scraping & Enhancement
-npm run scrape          # Scrape 5 oldest articles from BeyondChats
-npm run enhance         # Enhance 5 articles using Gemini AI
+npm run scrape           # Scrape 5 oldest articles
+npm run enhance          # Enhance 5 articles with AI
 
-# Database Management
-npm run reset-articles  # Clear all articles from database
+# Reset & Maintenance
+npm run reset-scraper    # Reset scraper, start from page 1 (keeps articles)
+npm run reset-full       # Delete ALL articles + reset states
 
-# Build & Production
-npm run build          # Build for production
-npm start              # Start production server
-npm run lint           # Run ESLint
+# Code Quality
+npm run lint             # Run ESLint
 ```
 
 ## 📊 Three-Phase Workflow
 
-### Phase 1: Scraping
-- Visits BeyondChats blogs section
-- Starts from the last page, reads bottom-to-top
-- Extracts article title, content, author, date, and URL
-- Stores in MongoDB with `isUpdated: false`
-- Prevents duplicates and tracks progress
+### Phase 1: Scraping (Local)
+- Run `npm run scrape` locally
+- Fetches 5 oldest articles from BeyondChats
+- Stores in MongoDB Atlas
+- Tracks progress in `scraper-state.json`
 
-### Phase 2: Enhancement
-- Retrieves unenhanced articles from database
-- Performs Google search for topic context
-- Scrapes relevant search results
-- Uses Gemini AI to create enriched content
-- Adds citations and references to original articles
-- Marks article with `isUpdated: true` and stores enhanced content
+### Phase 2: Enhancement (Local)
+- Run `npm run enhance` locally
+- Processes 5 unevaluated articles
+- Searches Google for context
+- Uses Gemini AI to enhance content
+- Stores enhanced version in MongoDB Atlas
+- Tracks progress in `enhance-state.json`
 
-### Phase 3: Frontend Display
-- Homepage lists all articles with filter options
-- Click any article to see detail page
+### Phase 3: Frontend (Live on Vercel)
+- Deployed to [https://beyondchats-assignment-fnaj.vercel.app/](https://beyondchats-assignment-fnaj.vercel.app/)
+- Displays all articles from MongoDB Atlas
 - Toggle between original and enhanced versions
-- View enhancement status, author, date, and read time
-- See references section with source articles
+- Filter by enhancement status
+- Mobile-responsive design
+- Professional UI with animations
 
 ## 🔌 API Endpoints
 
+All endpoints are live at `https://beyondchats-assignment-fnaj.vercel.app/api`
+
 ### Get All Articles
 ```bash
-curl http://localhost:3000/api/articles
+curl https://beyondchats-assignment-fnaj.vercel.app/api/articles
+curl https://beyondchats-assignment-fnaj.vercel.app/api/articles?enhanced=true
 ```
-
-Query parameters:
-- `enhanced=true` - Only enhanced articles
-- `enhanced=false` - Only original articles
 
 ### Get Single Article
 ```bash
-curl http://localhost:3000/api/articles/[id]
+curl https://beyondchats-assignment-fnaj.vercel.app/api/articles/[id]
 ```
 
 ### Create Article
 ```bash
-curl -X POST http://localhost:3000/api/articles \
+curl -X POST https://beyondchats-assignment-fnaj.vercel.app/api/articles \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Article Title",
@@ -227,55 +241,35 @@ curl -X POST http://localhost:3000/api/articles \
 
 ### Update Article
 ```bash
-curl -X PUT http://localhost:3000/api/articles/[id] \
+curl -X PUT https://beyondchats-assignment-fnaj.vercel.app/api/articles/[id] \
   -H "Content-Type: application/json" \
   -d '{
-    "updatedContent": "Enhanced content...",
     "isUpdated": true,
-    "references": ["ref1", "ref2"]
+    "updatedContent": "Enhanced content..."
   }'
 ```
 
 ### Delete Article
 ```bash
-curl -X DELETE http://localhost:3000/api/articles/[id]
-```
-
-## 📝 Database Schema
-
-### Article Model
-
-```javascript
-{
-  _id: ObjectId,
-  title: String,
-  content: String,
-  author: String,
-  date: Date,
-  url: String,
-  isUpdated: Boolean,
-  updatedContent: String,
-  references: [String],
-  createdAt: Timestamp,
-  updatedAt: Timestamp
-}
+curl -X DELETE https://beyondchats-assignment-fnaj.vercel.app/api/articles/[id]
 ```
 
 ## 🛠️ Tech Stack
 
-**Frontend:**
+**Frontend & Deployment:**
 - Next.js 16.1.1 - React framework with server components
 - React 19 - UI library
 - Tailwind CSS 4 - Utility-first CSS framework
 - React Markdown - Markdown rendering
+- **Vercel** - Hosting & deployment platform
 
-**Backend:**
+**Backend & Database:**
 - Node.js - Runtime environment
 - Express.js (via Next.js API routes) - Web framework
-- Mongoose 9.0.2 - MongoDB ODM
+- Mongoose 9.0.2 - MongoDB ORM
+- **MongoDB Atlas** - Cloud database
 
 **Data & APIs:**
-- MongoDB - NoSQL database
 - Google Generative AI SDK - Gemini AI integration
 - Puppeteer - Web scraping
 - Axios - HTTP client
@@ -291,67 +285,68 @@ curl -X DELETE http://localhost:3000/api/articles/[id]
 ### Google Gemini API (Free Tier)
 - 1,000,000 tokens per day
 - 15 requests per minute
-- Processing 5 articles uses approximately 50,000-100,000 tokens
-- Strategy: Batch processing with strategic delays
+- Processing 5 articles ≈ 50,000-100,000 tokens
 
 ### Google Custom Search API
-- 100 free queries per day (then $5 per 1000 queries)
-- 2-second delay between searches in enhancement script
+- 100 free queries per day
+- Built-in 2-second delays prevent quota exhaustion
 
-### Current Delays in Scripts
-- After Google search: 2 seconds
-- After Gemini generation: 2 seconds
-- Between articles: 3 seconds total
+### MongoDB Atlas (Free Tier)
+- 512MB storage (sufficient for this project)
+- Unlimited connections
+- Auto-scales
 
-## 🔒 Environment Variables
+## 📖 Documentation
 
-Create a `.env.local` file with:
-
-| Variable | Description | Where to Get |
-|----------|-------------|--------------|
-| `MONGODB_URI` | MongoDB connection string | [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) |
-| `GOOGLE_API_KEY` | Google Generative AI API key | [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| `GOOGLE_SEARCH_API_KEY` | Google Custom Search API key | [Google Cloud Console](https://console.cloud.google.com) |
-| `GOOGLE_SEARCH_ENGINE_ID` | Custom search engine ID | [Programmable Search Engine](https://programmablesearchengine.google.com) |
-| `SERPER_API_KEY` | Serper search API key | [Serper.dev](https://serper.dev) |
-
-## 📖 Additional Documentation
-
-- [Setup Guide](./docs/SETUP.md) - Detailed environment setup
-- [Architecture](./docs/ARCHITECTURE.md) - System design and flow
-- [Troubleshooting](./docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [SETUP.md](./docs/SETUP.md) - Complete setup and installation guide
+- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System design and data flow
+- [DEPLOYMENT.md](./docs/DEPLOYMENT.md) - Deployment instructions (already deployed)
+- [API.md](./docs/API.md) - Complete API reference with examples
+- [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Common issues and solutions
 
 ## 🎨 Key Design Decisions
 
-1. **Batch Processing**: Processing 5 articles per run respects API rate limits and prevents quota exhaustion
+1. **Batch Processing**: 5 articles per run respects API rate limits
 
-2. **State Tracking**: JSON files (`scraper-state.json`, `enhance-state.json`) allow scripts to resume from last position
+2. **State Tracking**: JSON files allow scripts to resume from last position
 
-3. **Duplicate Prevention**: MongoDB queries check for existing URLs before adding articles
+3. **Cloud-First**: MongoDB Atlas for scalability and accessibility
 
-4. **Bottom-to-Top Scraping**: Reads articles from last page backwards to find oldest content first
+4. **Vercel Deployment**: Serverless frontend with automatic scaling
 
-5. **AI Enhancement**: Uses Google search + content scraping to provide context for more relevant enhancements
+5. **Separation of Concerns**: 
+   - Scraping/enhancement run locally (long-running)
+   - Frontend served from Vercel (instant load)
+   - Database shared via MongoDB Atlas
 
-6. **Professional UI**: Modern design with smooth animations and responsive layout
+6. **Professional UI**: Modern design with smooth animations
+
+## 🚀 Deployment Status
+
+✅ **Frontend**: Live on Vercel  
+✅ **Database**: MongoDB Atlas  
+✅ **APIs**: Operational at `/api/articles`  
+✅ **Articles**: Synced from local scraping to cloud database  
+
+**Live Link**: [https://beyondchats-assignment-fnaj.vercel.app/](https://beyondchats-assignment-fnaj.vercel.app/)
 
 ## 🐛 Troubleshooting
 
-**Getting "API key not valid" error?**
-- Verify all API keys in `.env.local` are correct
-- Check that Gemini API is enabled in Google Cloud console
+**Frontend not loading?**
+- Visit [https://beyondchats-assignment-fnaj.vercel.app/](https://beyondchats-assignment-fnaj.vercel.app/)
+- Check Vercel deployment status
 
-**Database connection fails?**
-- Confirm MongoDB URI in `.env.local`
-- Check IP whitelist on MongoDB Atlas
-- Verify username and password are correct
+**No articles showing?**
+- Run `npm run scrape` locally
+- Data syncs to MongoDB Atlas automatically
+- Refresh live site
 
 **Scraper not finding articles?**
 - BeyondChats website structure may have changed
 - Check browser console for selector errors
-- Update Puppeteer to latest version
+- Update Puppeteer: `npm install puppeteer@latest`
 
-For more details, see [Troubleshooting Guide](./docs/TROUBLESHOOTING.md).
+For more details, see [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md).
 
 ## 📄 License
 

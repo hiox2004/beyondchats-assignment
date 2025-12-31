@@ -2,19 +2,22 @@
 
 This guide walks you through setting up the BeyondChats Article Enhancement Platform from scratch.
 
+**Note:** This project is already deployed! See [Live Demo](https://beyondchats-assignment-fnaj.vercel.app/) and follow this guide only if you want to run it locally for development.
+
 ## Prerequisites
 
 Before starting, ensure you have:
 - **Node.js** 18.0.0 or higher ([Download](https://nodejs.org))
 - **npm** (comes with Node.js)
-- **MongoDB** database (local or cloud)
-- Four API keys (detailed below)
+- **MongoDB Atlas** account (cloud database - free tier)
+- **Vercel** account (for frontend deployment - optional, already deployed)
+- Three API keys (detailed below)
 
 ## Step 1: Project Setup
 
 ### Clone the Repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/hiox2004/beyondchats-assignment.git
 cd beyondchats-assignment
 ```
 
@@ -30,28 +33,11 @@ This installs all required packages from `package.json`:
 - Google Generative AI SDK for AI features
 - Axios and Cheerio for HTTP and HTML parsing
 
-## Step 2: Set Up MongoDB
+## Step 2: Set Up MongoDB Atlas
 
-### Option A: Local MongoDB
+MongoDB Atlas is the cloud database used by this project (required for any deployment).
 
-1. **Install MongoDB Community Edition**
-   - [Download MongoDB Community Server](https://www.mongodb.com/try/download/community)
-   - Follow installation guide for your OS
-   - Start MongoDB service:
-     ```bash
-     # macOS/Linux
-     brew services start mongodb-community
-     
-     # Windows
-     net start MongoDB
-     ```
-
-2. **Get Connection String**
-   ```
-   mongodb://localhost:27017/beyondchats
-   ```
-
-### Option B: MongoDB Atlas (Cloud - Recommended)
+### Setup Instructions
 
 1. **Create Account**
    - Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
@@ -74,7 +60,7 @@ This installs all required packages from `package.json`:
    - Choose "Drivers" connection method
    - Copy connection string
    - Replace `<username>` and `<password>` with your credentials
-   - Example: `mongodb+srv://user:pass@cluster.mongodb.net/beyondchats`
+   - Example: `mongodb+srv://user:pass@cluster.mongodb.net/test?retryWrites=true&w=majority`
 
 5. **Whitelist IP Address**
    - Go to "Network Access"
@@ -127,17 +113,6 @@ This installs all required packages from `package.json`:
 - Free tier: 100 queries/day
 - Costs: $5 per 1000 queries after free tier
 
-### 3. Serper API Key (Optional but Recommended)
-
-1. Go to [Serper.dev](https://serper.dev)
-2. Sign up with email
-3. Go to dashboard
-4. Copy API key
-
-**Quota:**
-- Free tier: 100 searches/month
-- Costs: Variable based on usage
-
 ## Step 4: Create Environment Variables
 
 1. **Create `.env.local` file** in project root:
@@ -147,16 +122,13 @@ This installs all required packages from `package.json`:
 
 2. **Add environment variables**:
    ```env
-   # MongoDB
+   # MongoDB Atlas
    MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/beyondchats
    
    # Google APIs
    GOOGLE_API_KEY=your_gemini_api_key_here
    GOOGLE_SEARCH_API_KEY=your_search_api_key_here
-   GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id_here
-   
-   # Serper (optional)
-   SERPER_API_KEY=your_serper_api_key_here
+   GOOGLE_CSE_ID=your_search_engine_id_here
    ```
 
 3. **Verify file is in `.gitignore`**:
