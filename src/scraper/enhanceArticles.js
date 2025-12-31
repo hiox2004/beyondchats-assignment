@@ -1,8 +1,34 @@
 const puppeteer = require('puppeteer');
 const mongoose = require('mongoose');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config({ path: '.env.local' });
+
+const ENHANCE_STATE_FILE = path.join(__dirname, 'enhance-state.json');
+
+// Load last enhanced article from tracking file
+function loadEnhanceState() {
+  try {
+    if (fs.existsSync(ENHANCE_STATE_FILE)) {
+      const data = fs.readFileSync(ENHANCE_STATE_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.log('No previous enhance state found, starting fresh');
+  }
+  return { lastEnhancedArticleId: null };
+}
+
+// Save enhance state to tracking file
+function saveEnhanceState(state) {
+  try {
+    fs.writeFileSync(ENHANCE_STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (error) {
+    console.error('Failed to save enhance state:', error.message);
+  }
+}
 
 const articleSchema = new mongoose.Schema({
   title: String,
@@ -168,7 +194,7 @@ Write the enhanced article now:`;
 
 // Main enhancement process
 async function enhanceArticles() {
-  console.log('Starting Article Enhancement Process...\n');
+  console.log('Starting Article Enhancement Process (Batch Mode - 5 articles per run)...\n');
   
   const browser = await puppeteer.launch({
     headless: false,
@@ -180,18 +206,44 @@ async function enhanceArticles() {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/beyondchats');
     console.log('Connected to MongoDB\n');
 
-    // Get all articles that haven't been updated
-    const articles = await Article.find({ isUpdated: false });
-    console.log(`Found ${articles.length} articles to enhance\n`);
+    // Load enhance state to find where we left off
+    const state = loadEnhanceState();
+    
+    // Get all articles that haven't been updated, skip the ones we already enhanced
+    let query = { isUpdated: false };
+    let skipCount = 0;
+    
+    if (state.lastEnhancedArticleId) {
+      // Find articles after the last enhanced one
+      const lastArticle = await Article.findById(state.lastEnhancedArticleId);
+      if (lastArticle) {
+        query.createdAt = { $gt: lastArticle.createdAt };
+        console.log(`Resuming from article: ${lastArticle.title}\n`);
+      }
+    }
+
+    // Get only 5 articles for this batch
+    const articles = await Article.find(query).sort({ createdAt: 1 }).limit(5);
+    console.log(`Found ${articles.length} articles to enhance in this batch\n`);
+
+    if (articles.length === 0) {
+      console.log('✅ All articles have been enhanced!');
+      await browser.close();
+      await mongoose.disconnect();
+      return;
+    }
+
+    let lastEnhancedId = null;
 
     for (let i = 0; i < articles.length; i++) {
       const article = articles[i];
+      lastEnhancedId = article._id;
       console.log(`\n[${i + 1}/${articles.length}] Processing: ${article.title}`);
       console.log('='.repeat(60));
 
       // Step 1: Search Google
       const googleResults = await searchGoogle(article.title);
-      await wait(3000);
+      await wait(2000);
 
       if (googleResults.length === 0) {
         console.log('  ⚠ No Google results found, skipping...');
@@ -250,11 +302,17 @@ async function enhanceArticles() {
       });
 
       console.log(`  ✅ Article enhanced and saved!`);
-      await wait(5000); // Delay between articles
+      await wait(3000);
     }
 
     console.log('\n' + '='.repeat(60));
-    console.log('✅ All articles enhanced successfully!');
+    console.log(`✅ Batch enhancement completed! Enhanced ${articles.length} articles`);
+
+    // Save state for next batch
+    if (lastEnhancedId) {
+      saveEnhanceState({ lastEnhancedArticleId: lastEnhancedId });
+      console.log(`✅ Progress saved. Next run will enhance the next batch of 5 articles.`);
+    }
 
   } catch (error) {
     console.error('❌ Enhancement failed:', error.message);

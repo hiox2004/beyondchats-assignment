@@ -1,6 +1,32 @@
 const puppeteer = require('puppeteer');
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config({ path: '.env.local' });
+
+const SCRAPER_STATE_FILE = path.join(__dirname, 'scraper-state.json');
+
+// Load last scraped page from tracking file
+function loadScraperState() {
+  try {
+    if (fs.existsSync(SCRAPER_STATE_FILE)) {
+      const data = fs.readFileSync(SCRAPER_STATE_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.log('No previous scraper state found, starting fresh');
+  }
+  return { lastScrapedPage: null };
+}
+
+// Save scraper state to tracking file
+function saveScraperState(state) {
+  try {
+    fs.writeFileSync(SCRAPER_STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (error) {
+    console.error('Failed to save scraper state:', error.message);
+  }
+}
 
 const articleSchema = new mongoose.Schema({
   title: String,
@@ -19,6 +45,16 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function scrapeBlogs() {
   console.log('Starting scraper...');
+  
+  // Connect to MongoDB FIRST before scraping
+  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/beyondchats';
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log('Connected to MongoDB\n');
+  } catch (error) {
+    console.error('MongoDB connection failed:', error.message);
+    process.exit(1);
+  }
   
   const browser = await puppeteer.launch({ 
     headless: false,
@@ -47,11 +83,22 @@ async function scrapeBlogs() {
 
     console.log(`Total pages found: ${lastPageNum}`);
     
-    // Collect article links from last few pages until we have 5
-    const allArticleLinks = [];
-    let currentPage = lastPageNum;
+    // Load saved scraper state to continue from where we left off
+    const state = loadScraperState();
+    let currentPage = state.lastPageWithNewArticles || lastPageNum;
+    
+    if (state.lastPageWithNewArticles) {
+      console.log(`Resuming from page ${currentPage} (last page with new articles: page ${state.lastPageWithNewArticles})\n`);
+    } else {
+      console.log(`Starting fresh from page ${currentPage}\n`);
+    }
+    
+    // Collect articles until we have 5 new (non-duplicate) ones
+    let articleLinks = [];
+    let newArticlesCount = 0;
+    let lastPageWithNewArticles = currentPage; // Track the page where we find new articles
 
-    while (allArticleLinks.length < 5 && currentPage > 0) {
+    while (newArticlesCount < 5 && currentPage > 0) {
       console.log(`Scraping page ${currentPage}...`);
       
       const pageUrl = currentPage === 1 
@@ -63,7 +110,7 @@ async function scrapeBlogs() {
 
       const pageLinks = await page.evaluate(() => {
         const links = [];
-        const articles = document.querySelectorAll('article');
+        const articles = Array.from(document.querySelectorAll('article')).reverse(); // Read bottom to top
         
         articles.forEach(article => {
           const titleLink = article.querySelector('h2 a, h3 a, .entry-title a');
@@ -79,13 +126,33 @@ async function scrapeBlogs() {
       });
 
       console.log(`Found ${pageLinks.length} articles on page ${currentPage}`);
-      allArticleLinks.push(...pageLinks);
+
+      // Check each article on this page for duplicates
+      let newOnThisPage = 0;
+      for (const link of pageLinks) {
+        const existing = await Article.findOne({ url: link.url });
+        if (!existing) {
+          articleLinks.push(link);
+          newArticlesCount++;
+          newOnThisPage++;
+          lastPageWithNewArticles = currentPage; // Update the page where we found new articles
+          console.log(`  ✓ New article: ${link.title}`);
+          
+          if (newArticlesCount === 5) break; // Stop when we have 5 new ones
+        } else {
+          console.log(`  ⊘ Already exists: ${link.title}`);
+        }
+      }
+
+      // Only move to previous page if this page had no new articles
+      if (newOnThisPage === 0) {
+        console.log(`No new articles on page ${currentPage}, moving to previous page`);
+      }
+      
       currentPage--;
     }
 
-    // Take only the first 5 (oldest articles)
-    const articleLinks = allArticleLinks.slice(0, 5);
-    console.log(`\nCollected ${articleLinks.length} oldest articles total`);
+    console.log(`\nCollected ${articleLinks.length} new articles total`);
     
     const articles = [];
 
@@ -117,10 +184,6 @@ async function scrapeBlogs() {
     console.log(`\n✓ Successfully scraped ${articles.length} articles:`);
     articles.forEach((a, i) => console.log(`  ${i + 1}. ${a.title}`));
 
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/beyondchats';
-    await mongoose.connect(MONGODB_URI);
-    console.log('\nConnected to MongoDB');
-
     let saved = 0;
     let skipped = 0;
 
@@ -137,6 +200,13 @@ async function scrapeBlogs() {
     }
 
     console.log(`\n✅ Scraping completed! Saved: ${saved}, Skipped: ${skipped}`);
+
+    // Save the last page where we found new articles
+    if (lastPageWithNewArticles > 0) {
+      saveScraperState({ lastPageWithNewArticles });
+      console.log(`✅ Saved progress: Last page with new articles was page ${lastPageWithNewArticles}`);
+      console.log(`   Next run will start from page ${lastPageWithNewArticles}`);
+    }
 
   } catch (error) {
     console.error('❌ Scraping failed:', error.message);
